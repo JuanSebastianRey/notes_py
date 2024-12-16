@@ -1,4 +1,6 @@
 import json
+import tkinter as tk
+from tkinter import messagebox, simpledialog, ttk
 from sqlalchemy import create_engine, Column, Integer, String, Boolean
 from sqlalchemy.orm import sessionmaker, declarative_base
 
@@ -25,31 +27,34 @@ def agregar_tarea(title, description):
         nueva_tarea = Task(title=title, description=description)
         session.add(nueva_tarea)
         session.commit()
-        print("\nTarea agregada correctamente!\n")
+        messagebox.showinfo("Éxito", "Tarea agregada correctamente!")
+        listar_tareas()
     except Exception as e:
         session.rollback()
-        print(f"Error al agregar tarea: {e}")
+        messagebox.showerror("Error", f"Error al agregar tarea: {e}")
 
 def listar_tareas():
-    """Listar todas las tareas con su estado."""
+    """Listar todas las tareas en el Treeview."""
+    for item in tree.get_children():
+        tree.delete(item)
     tareas = session.query(Task).all()
-    if not tareas:
-        print("No hay tareas registradas.")
-        return
-
     for tarea in tareas:
         estado = "Completada" if tarea.completed else "Pendiente"
-        print(f"ID: {tarea.id} | Título: {tarea.title} | Descripción: {tarea.description} | Estado: {estado}")
+        tree.insert("", "end", values=(tarea.id, tarea.title, tarea.description, estado))
 
-def marcar_completada(task_id):
-    """Marcar una tarea como completada."""
-    tarea = session.query(Task).get(task_id)
-    if tarea:
-        tarea.completed = True
-        session.commit()
-        print("\nTarea marcada como completada!\n")
+def marcar_completada():
+    """Marcar una tarea seleccionada como completada."""
+    selected_item = tree.selection()
+    if selected_item:
+        task_id = tree.item(selected_item)['values'][0]
+        tarea = session.query(Task).get(task_id)
+        if tarea:
+            tarea.completed = True
+            session.commit()
+            messagebox.showinfo("Éxito", "Tarea marcada como completada!")
+            listar_tareas()
     else:
-        print("\nTarea no encontrada.\n")
+        messagebox.showwarning("Advertencia", "Seleccione una tarea para marcar como completada.")
 
 def eliminar_tarea_completada():
     """Eliminar todas las tareas completadas."""
@@ -58,10 +63,11 @@ def eliminar_tarea_completada():
         for tarea in tareas_completadas:
             session.delete(tarea)
         session.commit()
-        print("\nTareas completadas eliminadas correctamente!\n")
+        messagebox.showinfo("Éxito", "Tareas completadas eliminadas correctamente!")
+        listar_tareas()
     except Exception as e:
         session.rollback()
-        print(f"Error al eliminar tareas: {e}")
+        messagebox.showerror("Error", f"Error al eliminar tareas: {e}")
 
 def exportar_tareas():
     """Exportar todas las tareas a un archivo JSON."""
@@ -69,7 +75,7 @@ def exportar_tareas():
     datos = [{"id": t.id, "title": t.title, "description": t.description, "completed": t.completed} for t in tareas]
     with open("tareas.json", "w") as f:
         json.dump(datos, f, indent=4)
-    print("\nTareas exportadas a 'tareas.json'.\n")
+    messagebox.showinfo("Éxito", "Tareas exportadas a 'tareas.json'.")
 
 def importar_tareas():
     """Importar tareas desde un archivo JSON."""
@@ -80,45 +86,51 @@ def importar_tareas():
                 nueva_tarea = Task(id=tarea['id'], title=tarea['title'], description=tarea['description'], completed=tarea['completed'])
                 session.merge(nueva_tarea)
             session.commit()
-        print("\nTareas importadas correctamente!\n")
+        messagebox.showinfo("Éxito", "Tareas importadas correctamente!")
+        listar_tareas()
     except Exception as e:
         session.rollback()
-        print(f"Error al importar tareas: {e}")
+        messagebox.showerror("Error", f"Error al importar tareas: {e}")
 
-# --- Menú de la aplicación ---
-def menu():
-    while True:
-        print("\n--- Aplicación de Gestión de Tareas ---")
-        print("1. Agregar Tarea")
-        print("2. Listar Tareas")
-        print("3. Marcar Tarea como Completada")
-        print("4. Eliminar Tareas Completadas")
-        print("5. Exportar Tareas")
-        print("6. Importar Tareas")
-        print("7. Salir")
-
-        opcion = input("\nSeleccione una opción: ")
-
-        if opcion == "1":
-            title = input("Ingrese el título de la tarea: ")
-            description = input("Ingrese la descripción de la tarea: ")
+def agregar_tarea_dialogo():
+    title = simpledialog.askstring("Agregar Tarea", "Ingrese el título de la tarea:")
+    if title:
+        description = simpledialog.askstring("Agregar Tarea", "Ingrese la descripción de la tarea:")
+        if description:
             agregar_tarea(title, description)
-        elif opcion == "2":
-            listar_tareas()
-        elif opcion == "3":
-            task_id = int(input("Ingrese el ID de la tarea a marcar como completada: "))
-            marcar_completada(task_id)
-        elif opcion == "4":
-            eliminar_tarea_completada()
-        elif opcion == "5":
-            exportar_tareas()
-        elif opcion == "6":
-            importar_tareas()
-        elif opcion == "7":
-            print("\nSaliendo de la aplicación.\n")
-            break
-        else:
-            print("\nOpción no válida. Intente nuevamente.\n")
 
-if __name__ == "__main__":
-    menu()
+# --- Interfaz Gráfica con Tkinter ---
+root = tk.Tk()
+root.title("Gestión de Tareas")
+
+frame = tk.Frame(root)
+frame.pack(pady=20)
+
+columns = ("ID", "Título", "Descripción", "Estado")
+tree = ttk.Treeview(frame, columns=columns, show="headings")
+
+for col in columns:
+    tree.heading(col, text=col)
+    tree.column(col, width=150)
+
+tree.pack()
+
+# Botones de control
+btn_agregar = tk.Button(root, text="Agregar Tarea", command=agregar_tarea_dialogo)
+btn_agregar.pack(pady=5)
+
+btn_completar = tk.Button(root, text="Marcar como Completada", command=marcar_completada)
+btn_completar.pack(pady=5)
+
+btn_eliminar = tk.Button(root, text="Eliminar Tareas Completadas", command=eliminar_tarea_completada)
+btn_eliminar.pack(pady=5)
+
+btn_exportar = tk.Button(root, text="Exportar Tareas", command=exportar_tareas)
+btn_exportar.pack(pady=5)
+
+btn_importar = tk.Button(root, text="Importar Tareas", command=importar_tareas)
+btn_importar.pack(pady=5)
+
+listar_tareas()
+
+root.mainloop()
